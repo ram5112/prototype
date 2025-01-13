@@ -12,17 +12,13 @@ logger = logging.getLogger(__name__)
 # S3 Client
 s3_client = boto3.client("s3")
 
-# Ensure BUCKET_NAME is set
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-if not BUCKET_NAME:
-    logger.error("BUCKET_NAME environment variable is not set.")
-    st.error("Please set the BUCKET_NAME environment variable.")
-    exit()
+# Set BUCKET_NAME
+BUCKET_NAME = "ragchatpdf2"
 
 # Bedrock imports
 from langchain_aws.embeddings import BedrockEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 
 # Bedrock client
@@ -46,23 +42,20 @@ def split_text(pages, chunk_size=500, chunk_overlap=100):
 # Create and upload vector store to S3
 def create_vector_store(request_id, documents):
     try:
-        # Create FAISS vector store
         vector_store = FAISS.from_documents(documents, bedrock_embeddings)
-        folder_path = "/tmp/"
+        folder_path = f"/tmp/{request_id}/"
         os.makedirs(folder_path, exist_ok=True)
 
         # Save vector store locally
-        vector_store.save_local(folder_path, request_id)
-        faiss_files = glob.glob(f"{folder_path}{request_id}.*")
+        vector_store.save_local(folder_path)
 
-        if len(faiss_files) >= 2:
-            for file in faiss_files:
-                s3_client.upload_file(file, BUCKET_NAME, f"vector_stores/{os.path.basename(file)}")
-            logger.info("Vector store uploaded successfully.")
-            return True
-        else:
-            logger.error("Missing FAISS files.")
-            return False
+        # Upload FAISS files to S3
+        for file in glob.glob(f"{folder_path}*"):
+            s3_key = f"vector_stores/{request_id}/{os.path.basename(file)}"
+            s3_client.upload_file(file, BUCKET_NAME, s3_key)
+
+        logger.info("Vector store uploaded successfully.")
+        return True
     except Exception as e:
         logger.error(f"Error creating vector store: {e}")
         return False

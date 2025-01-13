@@ -15,7 +15,7 @@ BUCKET_NAME = "ragchatpdf2"
 
 # Bedrock imports
 from langchain_aws.embeddings import BedrockEmbeddings
-from langchain.llms.bedrock import Bedrock
+from langchain_community.llms import Bedrock
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain_community.vectorstores import FAISS
@@ -43,32 +43,23 @@ def download_latest_index_files():
     os.makedirs(folder_path, exist_ok=True)
 
     try:
-        # List S3 objects in the vector_stores folder
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix="vector_stores/")
         files = response.get("Contents", [])
 
-        # Find the latest .faiss and .pkl files
-        faiss_file = None
-        pkl_file = None
+        if not files:
+            raise FileNotFoundError("No vector store files found in S3.")
 
-        for file in files:
-            if file["Key"].endswith(".faiss"):
-                faiss_file = file["Key"]
-            elif file["Key"].endswith(".pkl"):
-                pkl_file = file["Key"]
+        # Get the latest prefix
+        latest_prefix = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key'].rsplit("/", 1)[0]
 
-        if not faiss_file or not pkl_file:
-            raise FileNotFoundError("FAISS index files (.faiss and .pkl) are not found in the S3 bucket.")
-
-        # Download files to the /tmp/ directory
-        faiss_local_path = f"{folder_path}{os.path.basename(faiss_file)}"
-        pkl_local_path = f"{folder_path}{os.path.basename(pkl_file)}"
-
-        s3_client.download_file(Bucket=BUCKET_NAME, Key=faiss_file, Filename=faiss_local_path)
-        s3_client.download_file(Bucket=BUCKET_NAME, Key=pkl_file, Filename=pkl_local_path)
+        # Download both index.faiss and index.pkl files
+        for file_ext in ["index.faiss", "index.pkl"]:
+            s3_key = f"{latest_prefix}/{file_ext}"
+            local_path = f"{folder_path}{file_ext}"
+            s3_client.download_file(BUCKET_NAME, s3_key, local_path)
 
         logger.info("FAISS index files downloaded successfully.")
-        return faiss_local_path, pkl_local_path
+        return f"{folder_path}index.faiss", f"{folder_path}index.pkl"
 
     except Exception as e:
         logger.error(f"Error downloading index files from S3: {e}")
@@ -83,8 +74,8 @@ def load_faiss_index():
 
     try:
         return FAISS.load_local(
-            index_name=os.path.splitext(os.path.basename(faiss_file))[0],
             folder_path="/tmp/",
+            index_name="index",
             embeddings=bedrock_embeddings,
             allow_dangerous_deserialization=True
         )
@@ -127,7 +118,6 @@ def main():
 
     st.write("The app will automatically load the latest vector store from S3.")
 
-    # Load the FAISS index
     st.write("Loading the vector store...")
     vectorstore = load_faiss_index()
     if vectorstore:
@@ -136,13 +126,13 @@ def main():
         st.error("Failed to load vector store.")
         return
 
-    # Ask a question
     question = st.text_input("Ask your question")
     if st.button("Ask"):
         llm = get_llm()
         with st.spinner("Querying..."):
             try:
                 response = get_response(llm, vectorstore, question)
+                st.write("Answer:")
                 st.write(response)
             except Exception as e:
                 st.error(f"Error: {e}")
