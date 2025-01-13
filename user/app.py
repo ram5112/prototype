@@ -3,33 +3,33 @@ import streamlit as st
 import os
 import logging
 
-# Logging setup
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# S3 Client
+
 s3_client = boto3.client("s3")
 
-# Set BUCKET_NAME
+
 BUCKET_NAME = "ragchatpdf2"
 
-# Bedrock imports
+
 from langchain_aws.embeddings import BedrockEmbeddings
 from langchain_community.llms import Bedrock
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain_community.vectorstores import FAISS
 
-# Bedrock client
+
 bedrock_client = boto3.client(service_name="bedrock-runtime")
 
-# Embeddings
+
 bedrock_embeddings = BedrockEmbeddings(
     model_id="amazon.titan-embed-text-v2:0",
     client=bedrock_client
 )
 
-# Initialize Bedrock LLM
+
 def get_llm():
     return Bedrock(
         model_id="anthropic.claude-v2:1",
@@ -37,7 +37,7 @@ def get_llm():
         model_kwargs={"max_tokens_to_sample": 512}
     )
 
-# Download the latest FAISS files from S3
+
 def download_latest_index_files():
     folder_path = "/tmp/"
     os.makedirs(folder_path, exist_ok=True)
@@ -66,7 +66,7 @@ def download_latest_index_files():
         st.error("Failed to download the latest FAISS index files from S3.")
         return None, None
 
-# Load FAISS index
+
 def load_faiss_index():
     faiss_file, pkl_file = download_latest_index_files()
     if not faiss_file or not pkl_file:
@@ -84,7 +84,7 @@ def load_faiss_index():
         st.error("Failed to load the FAISS index.")
         return None
 
-# Get a response from the vector store
+
 def get_response(llm, vectorstore, question):
     prompt_template = """
     Human: Please use the given context to answer the question concisely.
@@ -112,7 +112,7 @@ def get_response(llm, vectorstore, question):
     result = qa({"query": question})
     return result['result']
 
-# Main Streamlit app
+
 def main():
     st.title("User Site - Query PDF Knowledge Base")
 
@@ -137,6 +137,6 @@ def main():
             except Exception as e:
                 st.error(f"Error: {e}")
 
-# Run the app
+
 if __name__ == "__main__":
     main()

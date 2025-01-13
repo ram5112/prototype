@@ -12,16 +12,16 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-# Logging setup
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# S3 Client
+
 s3_client = boto3.client("s3")
 bedrock_client = boto3.client(service_name="bedrock-runtime")
 BUCKET_NAME = "ragchatpdf2"
 
-# Bedrock Embeddings and LLM
+
 bedrock_embeddings = BedrockEmbeddings(
     model_id="amazon.titan-embed-text-v2:0",
     client=bedrock_client
@@ -34,16 +34,16 @@ def get_llm():
         model_kwargs={"max_tokens_to_sample": 512}
     )
 
-# Helper function: Generate unique ID
+
 def get_unique_id():
     return str(uuid.uuid4())
 
-# Helper function: Split text into chunks
+
 def split_text(pages, chunk_size=500, chunk_overlap=100):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     return text_splitter.split_documents(pages)
 
-# Helper function: Create and upload vector store to S3
+
 def create_vector_store(request_id, documents):
     try:
         vector_store = FAISS.from_documents(documents, bedrock_embeddings)
@@ -64,7 +64,7 @@ def create_vector_store(request_id, documents):
         logger.error(f"Error creating vector store: {e}")
         return False
 
-# Helper function: Load FAISS index from S3
+
 def load_faiss_index():
     folder_path = "/tmp/"
     os.makedirs(folder_path, exist_ok=True)
@@ -88,7 +88,7 @@ def load_faiss_index():
         logger.error(f"Error downloading index files from S3: {e}")
         return None
 
-# Helper function: Get chatbot response
+
 def get_response(llm, vectorstore, question):
     prompt_template = """
     Human: Please use the given context to answer the question concisely.
@@ -111,7 +111,7 @@ def get_response(llm, vectorstore, question):
     result = qa({"query": question})
     return result['result']
 
-# Main Streamlit app
+
 def main():
     st.sidebar.title("📄 Admin Panel")
     page = st.sidebar.selectbox("Select Page", ["Chatbot", "Admin"])
@@ -161,6 +161,6 @@ def main():
             st.write(f"**You:** {q}")
             st.write(f"**Bot:** {r}")
 
-# Run the app
+
 if __name__ == "__main__":
     main()
